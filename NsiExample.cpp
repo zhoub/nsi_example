@@ -7,6 +7,59 @@ void RenderPlane(NSIContext_t ctx, bool ipr)
     //
     NSI::Context nsi(ctx);
 
+    // Create an environment/directional light.
+    //
+    const std::string light_xform_handle("light1");
+
+    nsi.Create(light_xform_handle, "transform");
+    nsi.Connect(light_xform_handle, "", NSI_SCENE_ROOT, "objects");
+
+    double light_xform_data[16] =
+    {
+        0.93319170504024518, 0.10695909495353316, - 0.34309327252337835, 0,
+        - 0.28981506734278339, 0.78850622992302932, - 0.54246212044129749, 0,
+        0.21250992538038788, 0.60565475097557997, 0.76682583044360864, 0,
+        0, 0, 0, 1
+    };
+    nsi.SetAttribute(light_xform_handle, NSI::DoubleMatrixArg("transformationmatrix", light_xform_data));
+
+    //
+    const std::string light_shape_handle("lightShape1");
+
+    nsi.Create(light_shape_handle, "environment");
+    nsi.Connect(light_shape_handle, "", light_xform_handle, "objects");
+
+    //
+    const std::string light_shader_handle = light_shape_handle + "Shader";
+
+    nsi.Create(light_shader_handle, "shader");
+
+    NSI::ArgumentList light_shader_args;
+
+    const char *delight_dir = getenv("DELIGHT");
+    char light_shader_name[1024];
+    sprintf(light_shader_name, "%s/maya/osl/directionalLight", delight_dir);
+
+    light_shader_args.Add(new NSI::StringArg("shaderfilename", light_shader_name));
+
+    float light_shader_color_data[3] = { 1, 1, 1 };
+    light_shader_args.Add(new NSI::ColorArg("i_color", light_shader_color_data));
+
+    light_shader_args.Add(new NSI::FloatArg("intensity", 1));
+    light_shader_args.Add(new NSI::FloatArg("diffuse_contribution", 1));
+    light_shader_args.Add(new NSI::FloatArg("specular_contribution", 1));
+
+    nsi.SetAttribute(light_shader_handle, light_shader_args);
+
+    // A light object requires "attribute" node to setup shader.
+    //
+    const std::string light_attrs_handle = light_shape_handle + "Attrs";
+
+    nsi.Create(light_attrs_handle, "attributes");
+    nsi.Connect(light_attrs_handle, "", light_xform_handle, "geometryattributes");
+   
+    nsi.Connect(light_shader_handle, "", light_attrs_handle, "surfaceshader");
+
     // Create plane's transform and connect it to the scene root.
     //
     const std::string plane_xform_handle("plane1");
@@ -97,6 +150,25 @@ void RenderPlane(NSIContext_t ctx, bool ipr)
         ->SetValuePointer(plane_shape_indices_data));
 
     nsi.SetAttribute(plane_shape_handle, plane_shape_attrs);
+
+    // Assign lambert shader to the plane.
+    //
+    const std::string plane_xform_attrs_handle = plane_xform_handle + "Attrs";
+
+    nsi.Create(plane_xform_attrs_handle, "attributes");
+    nsi.Connect(plane_xform_attrs_handle, "", plane_xform_handle, "geometryattributes");
+
+    const std::string lambert_shader_handle("lambert1");
+
+    nsi.Create(lambert_shader_handle, "shader");
+
+    char lambert_shader_name[256];
+    sprintf(lambert_shader_name, "%s/maya/osl/lambert", delight_dir);
+
+    nsi.SetAttribute(lambert_shader_handle, (NSI::StringArg("shaderfilename", lambert_shader_name),
+        NSI::FloatArg("i_diffuse", 0.8)));
+
+    nsi.Connect(lambert_shader_handle, "", plane_xform_attrs_handle, "surfaceshader");
 
     // Create camera's transform and shape.
     //
